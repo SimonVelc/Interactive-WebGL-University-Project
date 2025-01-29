@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>scene 1</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+        }
+        canvas {
+            width: 100%;
+            height: 90%;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="glCanvas"></canvas>
+    <script src="webgl-debug.js"></script>
+    <script src="gl-matrix-min.js"></script>
+    <div style="text-align: center;">
+        <label for="viewAngle">View Angle (degrees):</label>
+        <input type="text" id="viewAngle" value="80">
+        <label for="viewDistance">View Distance:</label>
+        <input type="text" id="viewDistance" value="9">
+        <div>
+            <label>Select Camera Position:</label>
+            <input type="radio" id="leftFrontTop" name="cameraPosition" value="leftFrontTop">
+            <label for="leftFrontTop">Left-Front-Top</label>
+            <input type="radio" id="leftFrontBottom" name="cameraPosition" value="leftFrontBottom">
+            <label for="leftFrontBottom">Left-Front-Bottom</label>
+            <input type="radio" id="leftBackTop" name="cameraPosition" value="leftBackTop">
+            <label for="leftBackTop">Left-Back-Top</label>
+            <input type="radio" id="leftBackBottom" name="cameraPosition" value="leftBackBottom">
+            <label for="leftBackBottom">Left-Back-Bottom</label>
+            <input type="radio" id="rightFrontTop" name="cameraPosition" value="rightFrontTop" checked>
+            <label for="rightFrontTop">Right-Front-Top</label>
+            <input type="radio" id="rightFrontBottom" name="cameraPosition" value="rightFrontBottom">
+            <label for="rightFrontBottom">Right-Front-Bottom</label>
+            <input type="radio" id="rightBackTop" name="cameraPosition" value="rightBackTop">
+            <label for="rightBackTop">Right-Back-Top</label>
+            <input type="radio" id="rightBackBottom" name="cameraPosition" value="rightBackBottom">
+            <label for="rightBackBottom">Right-Back-Bottom</label>
+        </div>
+        <button type="button" onclick="updateScene()">Recalculate</button>
+    </div>
+    <script>
+        let cubeRotation = 0.0;
+        let gl, programInfo, buffers;
+        let zFar = 100;
+        let viewAngle = 80;
+        let viewDistance = 9;
+
+        //Vertex Shader
+        const vsSource = `
+            attribute vec4 aVertexPosition;
+            attribute vec4 aVertexColor;
+            uniform mat4 uModelViewMatrix;
+            uniform mat4 uProjectionMatrix;
+            varying lowp vec4 vColor;
+            void main(void) {
+                gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
+                vColor = aVertexColor;
+            }
+        `;
+
+        //Fragment Shader
+        const fsSource = `
+            varying lowp vec4 vColor;
+            void main(void) {
+                gl_FragColor = vColor;
+            }
+        `;
+
+        
+        main();
+
+        function main() {
+            //initialize the WebGL context
+            const canvas = document.querySelector('#glCanvas');
+            gl = WebGLDebugUtils.makeDebugContext(canvas.getContext('webgl'));
+
+            //resize function
+            function resizeCanvas() {
+                canvas.width = canvas.clientWidth * window.devicePixelRatio; //canvas width
+                canvas.height = canvas.clientHeight * window.devicePixelRatio; //canvas height
+                gl.viewport(0, 0, canvas.width, canvas.height); //definition of the drawing area
+            }
+
+            //add a listener to change the window size
+            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas();//calling the function for the original size
+
+            //checking if WebGL is available
+            if (!gl) {
+                alert('Unable to initialize WebGL. Your browser may not support it.');
+                return;
+            }
+
+            //initialization of the shader
+            const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
+            if (!shaderProgram) {
+                console.error('Error initializing shader program');
+                return;
+            }
+
+            //programme information
+            programInfo = {
+                program: shaderProgram,
+                attribLocations: {
+                    vertexPosition: gl.getAttribLocation(shaderProgram, 'aVertexPosition'),
+                    vertexColor: gl.getAttribLocation(shaderProgram, 'aVertexColor'),
+                },
+                uniformLocations: {
+                    projectionMatrix: gl.getUniformLocation(shaderProgram, 'uProjectionMatrix'),
+                    modelViewMatrix: gl.getUniformLocation(shaderProgram, 'uModelViewMatrix'),
+                },
+            };
+
+            //initializing buffer
+            buffers = initBuffers(gl);
+
+            let then = 0;
+
+            //design function
+            function render(now) {
+                now *= 0.001;
+                const deltaTime = now - then;
+                then = now;
+
+                drawScene(gl, programInfo, buffers, deltaTime);
+
+                requestAnimationFrame(render);
+            }
+            requestAnimationFrame(render);
+        }
+
+        //initializing function of the shader program
+        function initShaderProgram(gl, vsSource, fsSource) {
+            const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
+            const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
+
+            const shaderProgram = gl.createProgram();
+            gl.attachShader(shaderProgram, vertexShader);
+            gl.attachShader(shaderProgram, fragmentShader);
+            gl.linkProgram(shaderProgram);
+
+            //checking if the shader program was initialized correctly
+            if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+                console.error('Unable to initialize the shader program: ' + gl.getProgramInfoLog(shaderProgram));
+                return null;
+            }
+
+            return shaderProgram;
+        }
+
+        //shader loading function
+        function loadShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+
+            //checking if the shader was compiled correctly
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error('An error occurred compiling the shaders: ' + gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+
+            return shader;
+        }
+
+        //initializing function of buffers
+        function initBuffers(gl) {
+            const positions = [
+                -1.0, -1.0,  1.0,
+                 1.0, -1.0,  1.0,
+                 1.0,  1.0,  1.0,
+                -1.0,  1.0,  1.0,
+                -1.0, -1.0, -1.0,
+                -1.0,  1.0, -1.0,
+                 1.0,  1.0, -1.0,
+                 1.0, -1.0, -1.0,
+                -1.0,  1.0, -1.0,
+                -1.0,  1.0,  1.0,
+                 1.0,  1.0,  1.0,
+                 1.0,  1.0, -1.0,
+                -1.0, -1.0, -1.0,
+                 1.0, -1.0, -1.0,
+                 1.0, -1.0,  1.0,
+                -1.0, -1.0,  1.0,
+                 1.0, -1.0, -1.0,
+                 1.0,  1.0, -1.0,
+                 1.0,  1.0,  1.0,
+                 1.0, -1.0,  1.0,
+                -1.0, -1.0, -1.0,
+                -1.0, -1.0,  1.0,
+                -1.0,  1.0,  1.0,
+                -1.0,  1.0, -1.0,
+            ];
+
+            const faceColors = [
+                [0.0, 0.0, 1.0, 1.0],
+                [0.0, 0.0, 0.8, 1.0],
+                [0.0, 0.5, 1.0, 1.0],
+                [0.0, 0.75, 1.0, 1.0],
+                [0.5, 0.5, 1.0, 1.0],
+                [0.3, 0.3, 1.0, 1.0],
+            ];
+
+            let colors = [];
+            for (let i = 0; i < faceColors.length; ++i) {
+                const c = faceColors[i];
+                colors = colors.concat(c, c, c, c);
+            }
+
+            //initialization function of buffers
+            const positionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+            //create colour buffer
+            const colorBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+
+            //create indicator buffer
+            const indexBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+
+            const indices = [
+                0,  1,  2,      0,  2,  3,
+                4,  5,  6,      4,  6,  7,
+                8,  9, 10,      8, 10, 11,
+                12, 13, 14,     12, 14, 15,
+                16, 17, 18,     16, 18, 19,
+                20, 21, 22,     20, 22, 23,
+            ];
+
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+
+            return {
+                position: positionBuffer,
+                color: colorBuffer,
+                indices: indexBuffer,
+            };
+        }
+
+        //scene drawing function
+        function drawScene(gl, programInfo, buffers, deltaTime) {
+            const fieldOfView = viewAngle * Math.PI / 180;   // σε radians
+            const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+            const zNear = 0.1;
+
+            const projectionMatrix = glMatrix.mat4.create();
+            const modelViewMatrix = glMatrix.mat4.create();
+
+            //camera positions map
+            const cameraPositionMap = {
+                leftFrontTop: [-viewDistance, viewDistance, viewDistance],
+                leftFrontBottom: [-viewDistance, viewDistance, -viewDistance],
+                leftBackTop: [-viewDistance, -viewDistance, viewDistance],
+                leftBackBottom: [-viewDistance, -viewDistance, -viewDistance],
+                rightFrontTop: [viewDistance, viewDistance, viewDistance],
+                rightFrontBottom: [viewDistance, viewDistance, -viewDistance],
+                rightBackTop: [viewDistance, -viewDistance, viewDistance],
+                rightBackBottom: [viewDistance, -viewDistance, -viewDistance]
+            };
+
+            let selectedPosition = [viewDistance, viewDistance, viewDistance]; // Προεπιλογή
+
+            //receiving the selected camera position
+            const selectedRadio = document.querySelector('input[name="cameraPosition"]:checked');
+            if (selectedRadio) {
+                selectedPosition = cameraPositionMap[selectedRadio.value];
+            }
+
+            //adjustment of cleaning color and depth
+            gl.clearColor(0.2, 0.2, 0.2, 1.0);
+            gl.clearDepth(1.0);
+            gl.enable(gl.DEPTH_TEST);
+            gl.depthFunc(gl.LEQUAL);
+
+            //cleaning the drawing area
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+            //setting the camera position
+            glMatrix.mat4.lookAt(modelViewMatrix, selectedPosition, [0, 0, 0], [0, 0, 1]);
+
+            //setting the viewing perspective 
+            glMatrix.mat4.perspective(projectionMatrix, fieldOfView, aspect, zNear, zFar);
+
+            //rotation of the model
+            glMatrix.mat4.translate(modelViewMatrix, modelViewMatrix, [-0.0, 0.0, -6.0]);
+
+            glMatrix.mat4.rotate(modelViewMatrix, modelViewMatrix, cubeRotation, [0, 0, 1]);
+            glMatrix.mat4.rotate(modelViewMatrix, modelViewMatrix, cubeRotation * .7, [0, 1, 0]);
+
+            //definition of buffer positions
+            {
+                const numComponents = 3;
+                const type = gl.FLOAT;
+                const normalize = false;
+                const stride = 0;
+                const offset = 0;
+                gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
+                gl.vertexAttribPointer(
+                    programInfo.attribLocations.vertexPosition,
+                    numComponents,
+                    type,
+                    normalize,
+                    stride,
+                    offset);
+                gl.enableVertexAttribArray(
+                    programInfo.attribLocations.vertexPosition);
+            }
+
+            //definition of colour buffers
+            {
+                const numComponents = 4;
+                const type = gl.FLOAT;
+                const normalize = false;
+                const stride = 0;
+                const offset = 0;
+                gl.bindBuffer(gl.ARRAY_BUFFER, buffers.color);
+                gl.vertexAttribPointer(
+                    programInfo.attribLocations.vertexColor,
+                    numComponents,
+                    type,
+                    normalize,
+                    stride,
+                    offset);
+                gl.enableVertexAttribArray(
+                    programInfo.attribLocations.vertexColor);
+            }
+
+            //buffer indicators
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.indices);
+
+            //using the shader program
+            gl.useProgram(programInfo.program);
+
+            //definition of uniform matrix
+            gl.uniformMatrix4fv(
+                programInfo.uniformLocations.projectionMatrix,
+                false,
+                projectionMatrix);
+            gl.uniformMatrix4fv(
+                programInfo.uniformLocations.modelViewMatrix,
+                false,
+                modelViewMatrix);
+
+            //design of the elements
+            {
+                const vertexCount = 36;
+                const type = gl.UNSIGNED_SHORT;
+                const offset = 0;
+                gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
+            }
+
+            //updating the rotation of the cube
+            cubeRotation += deltaTime;
+        }
+
+        //tent update function
+        function updateScene() {
+            viewAngle = parseFloat(document.getElementById('viewAngle').value) || 80;
+            viewDistance = parseFloat(document.getElementById('viewDistance').value) || 9;
+            zFar = viewDistance * 100;
+            drawScene(gl, programInfo, buffers, 0);
+        }
+    </script>
+</body>
+</html>
