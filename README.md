@@ -13,8 +13,8 @@ For the project to work properly you need to run it in Firefox and change a secu
 4. Close and reopen Firefox
 
 scenes: The HTML files with the different 3D scenes
-js: JavaScript βιβλιοθήκες που χρησιμοποιούνται στο project
-textures: Οι εικόνες που χρησιμοποιούνται ως υφές στα 3D αντικείμενα
+js: JavaScript libraries used in the project
+textures: The images used as textures in 3D objects
 
 **first_scene.html**  
 The first scene shows a basic 3D structure with textures and an initial camera. 
