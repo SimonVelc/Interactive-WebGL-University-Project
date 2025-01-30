@@ -12,7 +12,7 @@ For the project to work properly you need to run it in Firefox and change a secu
 3. Change the value from **true** to **false**
 4. Close and reopen Firefox
 
-scenes: Τα αρχεία HTML με τις διαφορετικές 3D σκηνές
+scenes: The HTML files with the different 3D scenes
 js: JavaScript βιβλιοθήκες που χρησιμοποιούνται στο project
 textures: Οι εικόνες που χρησιμοποιούνται ως υφές στα 3D αντικείμενα
 
